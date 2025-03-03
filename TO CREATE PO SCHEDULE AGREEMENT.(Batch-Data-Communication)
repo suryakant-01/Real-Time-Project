@@ -1,0 +1,325 @@
+*TO CREATE PO SCHEDULE AGREEMENT..
+************************************************************************
+* Author                 : SURYAKANT .
+* PROGRAM NAME          :  ZBDC_ME31L
+* PACKAGE               :  ZPROGRAM_01
+* T REQUEST NUMBER      :  **********
+* PROGRAM TITLE         : TO CREATE PO SCHEDULE AGREEMENT.
+* MODULE                :  SD  .
+* CREATION DATE         :  16/02/2025
+*CUSTOM TCODE           : ************
+**************************************************
+REPORT ZBDC_ME31L.
+
+TYPES:BEGIN OF LINE_HEAD,
+      AREF(5),
+      LIFNR TYPE EKKO-LIFNR,
+      EVART TYPE RM06E-EVART, "BSART:PO DOCUMENT TYPE
+      DOC_DATE(10), "BEDAT:PO DOCUMENT DATA
+      EKORG TYPE EKKO-EKORG, "PURCHASE ORGANIZATION
+      EKGRP TYPE EKKO-EKGRP, "PURCHASE GROUP
+      WERKS TYPE RM06E-WERKS, "PLANT
+      BEDNR TYPE EKPO-BEDNR, "TRACKING NUMBER
+      KDATE(10), "VALIDITY END DATE
+      EMATN TYPE EKPO-EMATN, "MATERIAL NUMBER
+      KTMNG(20), "TARGET QUANTITY
+      NPRICE(20), "NET PRICE
+      "UNIT TYPE EKPO-MEINS,
+
+     END OF LINE_HEAD.
+
+
+*DATA:IT_ITEM TYPE LINE_HEAD.
+DATA V_SNO(5).
+DATA:IT_ITEM TYPE  TABLE OF LINE_HEAD WITH HEADER LINE,
+     IT_BDCDATA TYPE TABLE OF BDCDATA WITH HEADER LINE,
+     IT_MSG TYPE TABLE OF BDCMSGCOLL WITH HEADER LINE,
+     IT_ITEM2 TYPE  TABLE OF LINE_HEAD WITH HEADER LINE.
+
+TABLES: T100.
+DATA:   MESSTAB LIKE BDCMSGCOLL OCCURS 0 WITH HEADER LINE.
+DATA:   L_MSTRING(480).
+DATA :BEGIN OF ITAB OCCURS 10,
+        TEXT TYPE STRING,
+     END OF ITAB.
+DATA IT_EXCEL TYPE  TABLE OF ALSMEX_TABLINE WITH HEADER LINE.
+
+DATA:V1 TYPE I,
+     V2 TYPE I,
+     FLAG TYPE I,
+     V_INDEX(2) TYPE N,
+     V_FNAM TYPE STRING,
+     K1 TYPE I,
+     V_MSG TYPE STRING,
+     W_CTU_PARAMS  TYPE CTU_PARAMS,
+     V_EBELN TYPE EKKO-EBELN,
+     V_DOCTYPE TYPE ESART.
+
+
+
+PARAMETERS P_FILE LIKE RLGRAP-FILENAME.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_FILE.
+  CALL FUNCTION 'F4_FILENAME'
+    IMPORTING
+      FILE_NAME = P_FILE.
+
+START-OF-SELECTION.
+  PERFORM UPLOAD_FLATFILE.
+  PERFORM CONVERT_IT_EXCEL_TO_IT_ITEM.
+  PERFORM POPULATE_DATA.
+
+
+
+FORM BDC_DYNPRO  USING    PROG SCRNO.
+
+  CLEAR IT_BDCDATA.
+  IT_BDCDATA-PROGRAM = PROG.
+  IT_BDCDATA-DYNPRO = SCRNO.
+  IT_BDCDATA-DYNBEGIN = 'X'.
+  APPEND IT_BDCDATA.
+
+ENDFORM.                    "BDC_DYNPRO
+
+FORM BDC_FIELD  USING   FNAME FVALUE.
+
+  CLEAR IT_BDCDATA.
+  IT_BDCDATA-FNAM = FNAME.
+  IT_BDCDATA-FVAL = FVALUE.
+  APPEND IT_BDCDATA.
+
+
+ENDFORM.                    "BDC_FIELD
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD_FLATFILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM UPLOAD_FLATFILE.
+CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+  EXPORTING
+    FILENAME                      = P_FILE
+    I_BEGIN_COL                   = 1
+    I_BEGIN_ROW                   = 3
+    I_END_COL                     = 16
+    I_END_ROW                     = 999999
+  TABLES
+    INTERN                        = IT_EXCEL
+ EXCEPTIONS
+   INCONSISTENT_PARAMETERS       = 1
+   UPLOAD_OLE                    = 2
+   OTHERS                        = 3
+          .
+IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  CONVERT_IT_EXCEL_TO_IT_ITEM
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM CONVERT_IT_EXCEL_TO_IT_ITEM .
+  LOOP AT IT_EXCEL.
+
+**IF IT_EXCEL-ROW = 1.
+    CASE IT_EXCEL-COL.
+      WHEN 1.
+        IT_ITEM-AREF  = IT_EXCEL-VALUE.
+      WHEN 2.
+        IT_ITEM-LIFNR = IT_EXCEL-VALUE.
+      WHEN 3.
+        IT_ITEM-EVART = IT_EXCEL-VALUE.
+      WHEN 4.
+        IT_ITEM-DOC_DATE = IT_EXCEL-VALUE.
+      WHEN 5.
+        IT_ITEM-EKORG = IT_EXCEL-VALUE.
+      WHEN 6.
+        IT_ITEM-EKGRP = IT_EXCEL-VALUE.
+      WHEN 7.
+        IT_ITEM-WERKS = IT_EXCEL-VALUE.
+           WHEN 8.
+        IT_ITEM-BEDNR = IT_EXCEL-VALUE.
+      WHEN 9.
+        IT_ITEM-KDATE = IT_EXCEL-VALUE.
+       WHEN 10.
+        IT_ITEM-EMATN = IT_EXCEL-VALUE.
+      WHEN 11.
+        IT_ITEM-KTMNG = IT_EXCEL-VALUE.
+      WHEN 12.
+        IT_ITEM-NPRICE = IT_EXCEL-VALUE.
+*      WHEN 13.
+*        IT_ITEM-UNIT =   IT_EXCEL-VALUE.
+
+        APPEND IT_ITEM.
+        CLEAR IT_ITEM.
+    ENDCASE.
+**ENDIF.
+
+  ENDLOOP.
+
+ENDFORM. " CONVERT_IT_EXCEL_TO_IT_ITEM
+*&---------------------------------------------------------------------*
+*&      Form  POPULATE_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM POPULATE_DATA .
+CLEAR: V1,V2.
+  REFRESH:IT_BDCDATA,ITAB.
+
+  IT_ITEM2[] = IT_ITEM[].
+
+  LOOP AT IT_ITEM2.
+
+
+    CLEAR:V2,V_INDEX,K1,FLAG,V_SNO.
+    V_SNO = IT_ITEM2-AREF.
+    AT NEW AREF.
+      REFRESH:IT_BDCDATA.
+      CLEAR V_DOCTYPE.
+      READ TABLE IT_ITEM WITH KEY AREF = V_SNO.
+      V_DOCTYPE = IT_ITEM-EVART.
+      DESCRIBE TABLE IT_ITEM LINES V1.
+
+*TO FILL WORK AREA W_CTU_PARAMS
+      W_CTU_PARAMS-DISMODE = 'N'.
+      W_CTU_PARAMS-UPDMODE = 'A'.
+      W_CTU_PARAMS-DEFSIZE = 'X'.
+
+
+      PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0200'.
+      PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+                                    'RM06E-BEDNR'.
+      PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                    '/00'.
+      PERFORM BDC_FIELD       USING 'EKKO-LIFNR'
+                                    IT_ITEM-LIFNR.
+      PERFORM BDC_FIELD       USING 'RM06E-EVART'
+                                   IT_ITEM-EVART.
+      PERFORM BDC_FIELD       USING 'RM06E-VEDAT'
+                                    IT_ITEM-DOC_DATE.
+      PERFORM BDC_FIELD       USING 'EKKO-EKORG'
+                                    IT_ITEM-EKORG.
+      PERFORM BDC_FIELD       USING 'EKKO-EKGRP'
+                                    IT_ITEM-EKGRP.
+      PERFORM BDC_FIELD       USING 'RM06E-WERKS'
+                                    IT_ITEM-WERKS.
+**      PERFORM BDC_FIELD       USING 'RM06E-LGORT'
+**                                    IT_ITEM-STOR_LOC.
+      PERFORM BDC_FIELD       USING 'RM06E-BEDNR'
+                                    IT_ITEM-BEDNR.
+      PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0201'.
+      PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                    '/00'.
+      PERFORM BDC_FIELD       USING 'EKKO-KDATB'
+                                    IT_ITEM-KDATE.
+
+
+      LOOP AT IT_ITEM WHERE AREF = V_SNO.
+        V2 = V2 + 1.
+        V_INDEX = V_INDEX + 1.
+*TO TABLE CONTROL TO SCROLL DOWN
+        K1 = K1 + 1.
+        IF K1 > 15.
+          CLEAR FLAG.
+        ENDIF.
+        IF K1 > 15 AND FLAG IS INITIAL.
+          FLAG = 1.
+          PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0220'.
+
+          PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                        '=NP'.
+          CLEAR :K1,V_INDEX.
+          V_INDEX = 2.
+          K1 =  2.
+        ENDIF.
+
+        PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0220'.
+**PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+**                              'RM06E-EVRTP(01)'.
+        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                      '=DETA'.
+
+        CONCATENATE 'RM06E-TCSELFLAG('V_INDEX')'  INTO V_FNAM.
+
+        PERFORM BDC_FIELD       USING V_FNAM
+                                      'X'.
+        CONCATENATE 'EKPO-EMATN('V_INDEX')'  INTO V_FNAM.
+        PERFORM BDC_FIELD       USING V_FNAM
+                                   IT_ITEM-EMATN.
+        CONCATENATE 'EKPO-KTMNG('V_INDEX')'  INTO V_FNAM.
+
+        PERFORM BDC_FIELD       USING V_FNAM
+                                IT_ITEM-KTMNG.
+        CONCATENATE 'EKPO-NETPR('V_INDEX')'  INTO V_FNAM.
+
+        PERFORM BDC_FIELD       USING V_FNAM
+                                IT_ITEM-NPRICE.
+
+      CONCATENATE 'EKPO-PEINH('V_INDEX')'  INTO V_FNAM.
+
+*        PERFORM BDC_FIELD       USING V_FNAM
+*                                IT_ITEM-UNIT.
+        PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0211'.
+        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM BDC_FIELD       USING 'EKPO-BSTAE'
+                                      ''.
+
+      ENDLOOP.
+      PERFORM BDC_DYNPRO      USING 'SAPMM06E' '0220'.
+
+      PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                    '=BU'.
+    CALL TRANSACTION 'ME31L' USING IT_BDCDATA OPTIONS FROM W_CTU_PARAMS.
+      IF SY-SUBRC = 0.
+        GET PARAMETER ID'BES' FIELD V_EBELN.
+***  MESSAGE I111(ZMSG8) WITH V_EBELN '-SCHEDULE AGREEMENT CREATED'.
+       CONCATENATE V_EBELN '-SCHEDULE AGREEMENT CREATED' INTO ITAB-TEXT.
+        APPEND ITAB.
+        CLEAR ITAB.
+      ELSE.
+        CLEAR:V_MSG,V_SNO.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            ID        = SY-MSGID
+            LANG      = '-D'
+            NO        = SY-MSGNO
+            V1        = SY-MSGV1
+            V2        = SY-MSGV2
+            V3        = SY-MSGV3
+            V4        = SY-MSGV4
+          IMPORTING
+            MSG       = V_MSG
+          EXCEPTIONS
+            NOT_FOUND = 1
+            OTHERS    = 2.
+        IF SY-SUBRC = 0.
+          CONCATENATE V_SNO V_MSG INTO ITAB-TEXT SEPARATED BY ' '.
+          APPEND ITAB.
+          CLEAR ITAB.
+***  MESSAGE I111(ZMSG8) WITH V_MSG.
+        ENDIF.
+      ENDIF.
+      DELETE IT_ITEM WHERE AREF = V_SNO.
+    ENDAT.
+  ENDLOOP.
+
+
+  LOOP AT ITAB.
+    WRITE:/ ITAB-TEXT.
+  ENDLOOP.
+
+
+ENDFORM.                    " POPULATE_DATA
