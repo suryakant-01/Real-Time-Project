@@ -1,0 +1,261 @@
+************************************************************************
+* Author                 : SURYAKANT
+* PROGRAM NAME          :  ZBDC_VK11_PR00_01
+* PACKAGE               :  ZPROGRAM_01
+* T REQUEST NUMBER      :  **********
+* PROGRAM TITLE         : TO MAINTAIN PRICING CONDITION USING MASTER DATA WITH RESPECT TO PLANT.
+* MODULE                :  SD
+* CREATION DATE         :  11/02/2025
+*CUSTOM TCODE           : ZBDC_PR00_MAIN
+**************************************************
+REPORT ZBDC_VK11_PR00_01.
+
+*TO CREATE LINE TYPE
+TYPES:BEGIN OF LINE_TYPE,
+        KSCHL         TYPE KSCHA,
+        WERKS         TYPE WERKS_D,
+        MATNR         TYPE MATNR,
+        KONWA(5),"         TYPE KONWA,
+        KBETR(16),"         TYPE KBETR,
+        VALID_FRM(10),
+        VALID_TO(10),
+      END OF LINE_TYPE.
+
+
+*TO CREATE INTERNAL TABLE IT_COND
+DATA IT_COND1 TYPE TABLE OF LINE_TYPE.
+DATA IT_COND2 TYPE TABLE OF LINE_TYPE.
+
+*TO CREATE WORK AREAS WA_COND1 AND WA_COND2 OF STRUCTURE LINE_TYPE.
+DATA:WA_COND1 TYPE LINE_TYPE,
+     WA_COND2 TYPE LINE_TYPE.
+
+*TO CREATE AN INTERNAL TABLE IT_TRUX OF STRUCTURE TRUXS_T_TEXT_DATA.
+DATA IT_RAW TYPE TRUXS_T_TEXT_DATA.
+
+*DATA W_CTU_PARAMS TYPE CTU_PARAMS.
+DATA : W_CTU_PARAMS TYPE CTU_PARAMS.
+
+DATA: N1 TYPE I VALUE 0.
+
+DATA : NI TYPE I, CH(2), D1(2) TYPE N, M1(2) TYPE N, D2(2), M2(2), Y(4),
+       V_DATE LIKE SY-DATUM, V_DATE2(10), V_DATE3(10).
+
+*TO CREATE INTERNAL TABLE IT_BDCDATA OF STRUCTURE BDCDATA
+DATA IT_BDCDATA TYPE TABLE OF BDCDATA WITH HEADER LINE.
+
+*TO CAPTURE ERRORS :INTERNAL TABLE IT_MSG OF STRUCTURE BDCMSGCOLL
+DATA IT_MSG TYPE TABLE OF BDCMSGCOLL WITH HEADER LINE.
+
+*TO CAPTURE ERRORS:
+DATA:BEGIN OF IT_ERRORS OCCURS 0,
+       WERKS(4),
+       MATERIAL(18),
+       TEXT(100),
+     END OF IT_ERRORS.
+
+DATA : E1 TYPE I,
+       S1 TYPE I.
+
+*TO CREATE INPUT FIELD TO UPLOAD NON-SAP DATA (FLAT FILE).
+SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME.
+     PARAMETERS P_FILE LIKE RLGRAP-FILENAME.
+     PARAMETERS P_MODE TYPE CTU_PARAMS DEFAULT 'N'.
+SELECTION-SCREEN END OF BLOCK B1.
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_FILE.
+  PERFORM BROWSE_FILE.
+
+START-OF-SELECTION.
+  PERFORM UPLOAD_FILE.
+  PERFORM MAP_DATA.
+
+*&---------------------------------------------------------------------*
+*&      Form  BROWSE_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM BROWSE_FILE .
+   CALL FUNCTION 'F4_FILENAME'
+    IMPORTING
+      FILE_NAME           = P_FILE.
+
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  UPLOAD_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM UPLOAD_FILE .
+    CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+      EXPORTING
+        I_LINE_HEADER              = 'X'
+        I_TAB_RAW_DATA             = IT_RAW
+        I_FILENAME                 = P_FILE
+      TABLES
+        I_TAB_CONVERTED_DATA       = IT_COND1
+     EXCEPTIONS
+       CONVERSION_FAILED          = 1
+       OTHERS                     = 2.
+    IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  MAP_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM MAP_DATA .
+SORT IT_COND1 BY KSCHL WERKS.
+  IT_COND2 = IT_COND1.
+  DELETE ADJACENT DUPLICATES FROM IT_COND1 COMPARING KSCHL WERKS.
+     W_CTU_PARAMS-DISMODE = 'N'. "MODE : N(NO SCREENS)
+     W_CTU_PARAMS-UPDMODE = 'A'.  "UPDATE : A(ASYNCHRONOUS)
+     W_CTU_PARAMS-DEFSIZE = 'X'.
+     CLEAR: N1,CH.
+LOOP AT IT_COND1 INTO WA_COND1.
+
+    PERFORM BDC_DYNPRO      USING 'SAPMV13A' '0100'.
+    PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+                                  'RV13A-KSCHL'.
+    PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM BDC_FIELD       USING 'RV13A-KSCHL'
+                                  WA_COND1-KSCHL. "'PR00'.
+    PERFORM BDC_DYNPRO      USING 'SAPLV14A' '0100'.
+    PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+                                  'RV130-SELKZ(03)'.
+    PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                  '=WEIT'.
+    PERFORM BDC_FIELD       USING 'RV130-SELKZ(01)'
+                                  ''.
+    PERFORM BDC_FIELD       USING 'RV130-SELKZ(03)'
+                                  'X'.
+    PERFORM BDC_DYNPRO      USING 'SAPMV13A' '1406'.
+    PERFORM BDC_FIELD       USING 'BDC_CURSOR'
+                                  'KONP-KONWA(01)'.
+    PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM BDC_FIELD       USING 'KOMG-WERKS'
+                                  WA_COND1-WERKS. "'1000'.
+LOOP AT IT_COND2 INTO WA_COND2 WHERE  KSCHL = WA_COND1-KSCHL AND WERKS = WA_COND1-WERKS.
+
+   CLEAR:D1,D2,M1,M2,V_DATE,V_DATE2,V_DATE3.
+      IF N1 LT 15.
+        N1 = N1 + 1.
+      ELSE.
+        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                               '=P+'.
+        PERFORM BDC_DYNPRO      USING 'SAPMV13A' '1406'.
+      ENDIF.
+      CH = N1.
+      PERFORM BDC_FIELD1       USING 'KOMG-MATNR'
+                                  WA_COND2-MATNR CH.
+        PERFORM BDC_FIELD1       USING 'KONP-KONWA'              "'KONP-KONWA(01)'
+                                   WA_COND2-KONWA CH.
+      PERFORM BDC_FIELD1      USING 'KONP-KBETR'
+                                  WA_COND2-KBETR CH.
+      SPLIT WA_COND2-VALID_FRM AT '/' INTO D2 M2 Y.
+      D1 = D2.
+      M1 = M2.
+      D2 = D1.
+      M2 = M1.
+      CONCATENATE Y M2 D2 INTO V_DATE.
+      WRITE V_DATE TO V_DATE2.
+      PERFORM BDC_FIELD1       USING 'RV13A-DATAB'   "RV13A-DATAB(01)'
+                                    V_DATE2 CH.
+      CLEAR:D1,D2,M1,M2,V_DATE.
+      SPLIT WA_COND2-VALID_TO AT '/' INTO D2 M2 Y.
+      D1 = D2.
+      M1 = M2.
+      D2 = D1.
+      M2 = M1.
+      CONCATENATE Y M2 D2 INTO V_DATE.
+      WRITE V_DATE TO V_DATE3.
+      PERFORM BDC_FIELD1       USING 'RV13A-DATBI'   "RV13A-DATBI(01)'
+                                    V_DATE3 CH.
+      PERFORM BDC_DYNPRO      USING 'SAPMV13A' '1406'.
+        PERFORM BDC_FIELD       USING 'BDC_OKCODE'
+                                  '=SICH'.
+
+     CALL TRANSACTION 'VK11' USING IT_BDCDATA OPTIONS FROM W_CTU_PARAMS
+                                         MESSAGES INTO IT_MSG.
+    IF IT_MSG[] IS NOT INITIAL.
+      READ TABLE IT_MSG WITH KEY MSGTYP = 'E'.
+      IF SY-SUBRC = 0.
+        IT_ERRORS-WERKS = WA_COND1-WERKS.
+
+* TO CAPTURE COMPLETE ERROR MESSSAGE.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = IT_MSG-MSGID
+            lang      = '-D'
+            no        = IT_MSG-MSGNR
+            v1        = IT_MSG-MSGV1
+            v2        = IT_MSG-MSGV2
+            v3        = IT_MSG-MSGV3
+            v4        = IT_MSG-MSGV4
+          IMPORTING
+            MSG      = IT_ERRORS-TEXT
+          EXCEPTIONS
+            NOT_FOUND = 1
+            OTHERS    = 2.
+        IF SY-SUBRC = 0.
+          APPEND IT_ERRORS.
+          E1 = E1 + 1.
+        ELSE.
+        ENDIF.
+      ELSE.
+        S1 = S1 + 1.
+      ENDIF.
+    ENDIF.
+
+  ENDLOOP.
+  IF SY-SUBRC = 0.
+    MESSAGE | { S1 } RECORDS ARE SUCCESSFUL AND { E1 } RECORDS CONTAINS ERROR | TYPE 'E'.
+  ENDIF.
+
+  ENDLOOP.
+ENDFORM.
+
+
+FORM BDC_DYNPRO  USING    PROG SCRNO.
+  CLEAR IT_BDCDATA.
+  IT_BDCDATA-PROGRAM = PROG.
+  IT_BDCDATA-DYNPRO = SCRNO.
+  IT_BDCDATA-DYNBEGIN = 'X'.
+  APPEND IT_BDCDATA.
+
+ENDFORM.
+
+
+FORM BDC_FIELD  USING   FNAM FVAL.
+  CLEAR IT_BDCDATA.
+  IT_BDCDATA-FNAM = FNAM.
+  IT_BDCDATA-FVAL = FVAL.
+  APPEND IT_BDCDATA.
+ENDFORM.
+
+
+FORM BDC_FIELD1  USING   FNAM FVAL CH.
+  CLEAR IT_BDCDATA.
+  CONCATENATE FNAM '(' CH ')' INTO IT_BDCDATA-FNAM.
+
+  CONDENSE IT_BDCDATA-FVAL NO-GAPS.
+  IT_BDCDATA-FVAL = FVAL.
+  APPEND  IT_BDCDATA.
+ENDFORM.
