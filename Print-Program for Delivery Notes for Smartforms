@@ -1,0 +1,85 @@
+REPORT ZPRINT_DELNOTE01.
+*TO CREATE IMPLICIT WORK AREA
+TABLES LIKP.
+DATA : v_fm(30).
+*TO CREATE AN INTERNAL TABLE IT_LIPS OF STRUCTURE LIPS
+DATA IT_LIPS TYPE TABLE OF LIPS.
+*TO CREATE WORK AREA COMP_ADRC OF STRUCTURE ADRC
+DATA COMP_ADRC LIKE ADRC.
+*TO CREATE A VARIABLE FOR CUSTOMER ADDRESS
+DATA V_ADRNR TYPE ADRNR.
+DATA V_ADDRESS TYPE ADRNR.
+*TO CREATE AN INPUT FIELD TO ENTER DELIVERY NUMBER
+PARAMETERS P_VBELN TYPE VBELN_VL.
+
+START-OF-SELECTION.
+  PERFORM GET_DATA.
+  PERFORM CALL_SFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_DATA .
+
+*TO GET DELIVERY DOCUMENT HEADER DATA FROM LIKP
+  SELECT SINGLE * FROM LIKP WHERE VBELN = P_VBELN.
+**TO GET DELIVERY ITEM DATA FROM LIPS
+  SELECT * FROM LIPS INTO TABLE IT_LIPS WHERE VBELN = P_VBELN.
+*    TO GET ADRNR FROM TVKO
+  SELECT SINGLE ADRNR FROM TVKO INTO V_ADDRESS WHERE VKORG = LIKP-VKORG.
+  IF SY-SUBRC = 0.
+*        TO GET COMPANY ADDRESS FROM ADRC
+    SELECT SINGLE * FROM ADRC INTO COMP_ADRC WHERE ADDRNUMBER = V_ADDRESS.
+  ENDIF.
+*TO GET ADRNR FROM KNA1
+  SELECT SINGLE ADRNR FROM KNA1 INTO V_ADRNR WHERE KUNNR = LIKP-KUNNR.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  CALL_SFORM
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM CALL_SFORM .
+CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+  EXPORTING
+    FORMNAME                 = 'ZDELNOTE2'
+ IMPORTING
+   FM_NAME                  = V_FM
+ EXCEPTIONS
+   NO_FORM                  = 1
+   NO_FUNCTION_MODULE       = 2
+   OTHERS                   = 3
+          .
+IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+CALL FUNCTION V_FM "'/1BCDWB/SF00000593'
+  EXPORTING
+    COMP_ADR                   = COMP_ADRC
+    LIKP                       = likp
+    V_CUST_ADDR                = V_ADRNR
+
+  TABLES
+    IT_LIPS                    = it_lips
+ EXCEPTIONS
+   FORMATTING_ERROR           = 1
+   INTERNAL_ERROR             = 2
+   SEND_ERROR                 = 3
+   USER_CANCELED              = 4
+   OTHERS                     = 5
+          .
+IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+
+ENDFORM.
