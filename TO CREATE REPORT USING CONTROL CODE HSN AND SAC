@@ -1,0 +1,468 @@
+*TO CREATE REPORT USING CONTROL CODE HSN AND SAC
+************************************************************************
+* Author                :  SURYAKANT PANDEY
+* PROGRAM NAME          :  ZREP_CONTROL_CODE_HSN_SAC
+* PACKAGE               :  ZPROGRAM_01
+* T REQUEST NUMBER      :
+* PROGRAM TITLE         :  CONTROL-CODE-HSN & SAC
+* MODULE                :  MATERIAL MASTER
+* PROGRAM TYPE          :  ABAP LIST VEIWER
+* CREATED BY            :  SURYAKANT PANDEY
+* CREATION DATE         :  31/01/2025
+************************************************************************
+
+
+REPORT ZREP_CONTROL_CODE_HSN_SAC.
+
+*TO CREATE LINE TYPE STRUCTURE LT_MARA
+TYPES : BEGIN OF LT_MARA,
+        MATNR TYPE MATNR, " Material Number
+        ERSDA TYPE ERSDA, " Created On
+        ERNAM TYPE ERNAM, " Person who Created
+        MTART TYPE MTART, " Material Type
+        MBRSH TYPE MBRSH, " Industry sector
+        MATKL TYPE MATKL, " Material Group
+        MEINS TYPE MEINS, " Base Unit of Measure
+  END OF LT_MARA.
+
+*TO CREATE LINE TYPE STRUCTURE LT_MARC
+TYPES : BEGIN OF LT_MARC,
+        MATNR TYPE MATNR, " Material Number
+        WERKS TYPE WERKS_D, "Plant
+        EKGRP TYPE EKGRP,   " Purchasing Group
+        STEUC TYPE STEUC,   " Control code
+  END OF LT_MARC.
+
+*TO CREATE LINE TYPE STRUCTURE LT_MAKT
+
+TYPES : BEGIN OF LT_MAKT,
+        MATNR TYPE MATNR, " Material Number
+*       SPRAS TYPE SPRAS, " Language Key
+        MAKTX TYPE MAKTX, " Material Description
+  END OF LT_MAKT.
+
+*TO CREATE LINE TYPE STRUCTURE LT_MBEW
+
+TYPES : BEGIN OF LT_MBEW,
+        MATNR TYPE MATNR,   " Material Number
+        BWKEY TYPE BWKEY,   " Valuation Area
+        BWTAR TYPE BWTAR_D, " Valuation Type
+        BKLAS TYPE BKLAS,   " Valuation Class
+  END OF LT_MBEW.
+
+*TO CREATE LINE TYPE STRUCTURE LT_MVKE
+
+TYPES : BEGIN OF LT_MVKE,
+        MATNR TYPE MATNR, " Material Number
+        VKORG TYPE VKORG, " Sales Organization
+        VTWEG TYPE VTWEG, " Distribution Channel
+        KTGRM TYPE KTGRM, " Account assignment group for this material
+  END OF LT_MVKE.
+
+* CREATA FINAL LINE TYPE LT_FINAL STRUCTURE.
+TYPES : BEGIN OF LT_FINAL,
+        MATNR TYPE MATNR, " Material Number
+        ERNAM TYPE ERNAM, " Person who Created
+        ERSDA TYPE ERSDA, " Created On
+        MTART TYPE MTART, " Material Type
+        MBRSH TYPE MBRSH, " Industry sector
+        MATKL TYPE MATKL, " Material Group
+        MEINS TYPE MEINS, " Base Unit of Measure
+        WERKS TYPE WERKS_D, "Plant
+        EKGRP TYPE EKGRP,   " Purchasing Group
+        STEUC TYPE STEUC,   " Control code
+        MAKTX TYPE MAKTX, " Material Description
+        BWKEY TYPE BWKEY, " Valuation Area
+        BWTAR TYPE BWTAR_D, " Valuation Type
+        BKLAS TYPE BKLAS,   " Valuation Class
+        VKORG TYPE VKORG, " Sales Organization
+        VTWEG TYPE VTWEG, " Distribution Channel
+        KTGRM TYPE KTGRM, " Account assignment group for this material
+  END OF LT_FINAL.
+
+
+* TO CREATEA AN INTERNAL TABLE FOR LINE_TYPE LT_MARA, LT_MARC, LT_MAKT, LT_MBEW,  LT_MVKE.
+
+  DATA : IT_MARA TYPE TABLE OF LT_MARA.
+  DATA : IT_MARC TYPE TABLE OF LT_MARC.
+  DATA : IT_MAKT TYPE TABLE OF LT_MAKT.
+  DATA : IT_MBEW TYPE TABLE OF LT_MBEW.
+  DATA : IT_MVKE TYPE TABLE OF LT_MVKE.
+  DATA : IT_FINAL TYPE TABLE OF LT_FINAL.
+  DATA : IT_FCAT TYPE TABLE OF SLIS_FIELDCAT_ALV. " *TO CREATE AN INTERNAL TABLE IT_FCAT OF STRUCTURE SLIS_FIELDCAT_ALV.
+
+* TO CREATEA WORK-AREA FOR LINE_TYPE LT_MARA, LT_MARC, LT_MAKT, LT_MBEW,  LT_MVKE.
+
+  DATA : WA_MARA TYPE LT_MARA.
+  DATA : WA_MARC TYPE LT_MARC.
+  DATA : WA_MAKT TYPE LT_MAKT.
+  DATA : WA_MBEW TYPE LT_MBEW.
+  DATA : WA_MVKE TYPE LT_MVKE.
+  DATA : WA_FINAL TYPE LT_FINAL.
+   DATA : WA_FCAT TYPE SLIS_FIELDCAT_ALV. "TO CREATE WORK-AREA IT_FCAT OF STRUCTURE SLIS_FIELDCAT_ALV.
+
+
+
+*TO CREATE VARIALBE
+
+  DATA:F_MTART TYPE MTART,
+       F_WERKS TYPE WERKS_D,
+       F_STEUC TYPE STEUC.
+
+*DATA : V_QTY TYPE LABST.
+
+*PARAMETERS : P_STEUC TYPE STEUC.
+*TO CREATE RANGE OF INPUT FIELDS ONTO SELECTIION-SCREEN
+SELECTION-SCREEN : BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-100.
+   SELECT-OPTIONS : S_MTART FOR F_MTART,
+                    S_WERKS FOR F_WERKS,
+                    S_STEUC FOR F_STEUC.
+
+SELECTION-SCREEN END OF BLOCK B1.
+
+AT SELECTION-SCREEN.
+  PERFORM VALIDATE_FIELDS.
+
+*&---------------------------------------------------------------------*
+*&      Form  VALIDATE_FIELDS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM VALIDATE_FIELDS .
+* VAILDATE THE MTART : MATERTAL TYPE.
+  IF S_MTART[] IS NOT INITIAL.
+    SELECT SINGLE MTART FROM T134 INTO @DATA(V_MTART) WHERE MTART IN @S_MTART.
+    IF SY-SUBRC <> 0.
+      MESSAGE ' INVALID MATERIAL TYPE' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+*TO VAILDATE THE WERKS FIELD : PLANT.
+  IF S_WERKS[] IS NOT INITIAL.
+    SELECT SINGLE WERKS FROM T001W INTO @DATA(V_WERKS) WHERE WERKS IN @S_WERKS.
+    IF SY-SUBRC <> 0.
+      MESSAGE 'INVALID PLANT TYPE' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+* TO VAILDATE THE STEUC FILEDS : CONTROL CODES.
+  IF S_STEUC[] IS NOT INITIAL.
+    SELECT SINGLE STEUC FROM T604F INTO @DATA(V_STEUC) WHERE STEUC IN @S_STEUC.
+    IF SY-SUBRC <> 0.
+      MESSAGE 'INVAILD CONTROL CODE TYPE' TYPE 'E'.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+
+START-OF-SELECTION.
+  PERFORM GET_DATA.
+  PERFORM PROCESS_DATA.
+  PERFORM BUILD_FIELDCAT.
+  PERFORM GET_DISPLAY.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_DATA.
+*TO GET MARA DETAILS
+   SELECT MATNR ERSDA ERNAM MTART MBRSH MATKL MEINS FROM MARA INTO TABLE IT_MARA
+     WHERE MTART IN S_MTART.
+
+*TO GET PLANT DATA FROM MARC
+IF IT_MARA IS NOT INITIAL.
+    SELECT MATNR WERKS EKGRP STEUC FROM MARC INTO  TABLE IT_MARC
+      FOR ALL ENTRIES IN IT_MARA WHERE MATNR = IT_MARA-MATNR AND WERKS IN S_WERKS AND STEUC IN S_STEUC.
+
+    SELECT MATNR MAKTX FROM MAKT INTO TABLE IT_MAKT
+        FOR ALL ENTRIES IN IT_MARA WHERE MATNR = IT_MARA-MATNR AND SPRAS = 'EN'.
+   ENDIF.
+
+*TO GET MATAERIAL VALUATION FROM DBTABLE MBEW INTO INTERNAL TABLE IT_MBEW
+IF IT_MARA IS NOT INITIAL.
+   SELECT MATNR  BWKEY BWTAR BKLAS FROM MBEW INTO TABLE IT_MBEW
+      FOR ALL ENTRIES IN IT_MARA WHERE MATNR = IT_MARA-MATNR.
+
+   ENDIF.
+
+*TO GET SALES DATA FOR MATERIAL FROM MVKE INTO INTERNAL TABLE IT_MVKE
+IF IT_MARA IS NOT INITIAL.
+    SELECT MATNR VKORG VTWEG FROM MVKE INTO TABLE IT_MVKE
+      FOR ALL ENTRIES IN IT_MARA WHERE MATNR = IT_MARA-MATNR.
+
+    ENDIF.
+
+
+
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM PROCESS_DATA .
+  SORT IT_MARA.
+  SORT IT_MARC.
+  SORT IT_MAKT.
+  SORT IT_MBEW.
+  SORT IT_MVKE.
+LOOP AT IT_MARC INTO WA_MARC.
+    WA_FINAL-MATNR = WA_MARC-MATNR.
+    WA_FINAL-WERKS = WA_MARC-WERKS.
+    WA_FINAL-EKGRP = WA_MARC-EKGRP.
+    WA_FINAL-STEUC = WA_MARC-STEUC.
+
+*TO READ MATERIAL DATA FROM IT_MARA.
+READ TABLE IT_MARA INTO WA_MARA WITH KEY MATNR = WA_MARC-MATNR BINARY SEARCH.
+    IF SY-SUBRC = 0.
+      WA_FINAL-MTART = WA_MARA-MTART.
+      WA_FINAL-ERSDA = WA_MARA-ERSDA.
+      WA_FINAL-ERNAM = WA_MARA-ERNAM.
+      WA_FINAL-MBRSH = WA_MARA-MBRSH.
+      WA_FINAL-MATKL = WA_MARA-MATKL.
+      WA_FINAL-MEINS = WA_MARA-MEINS.
+      ENDIF.
+
+   READ TABLE IT_MAKT INTO WA_MAKT WITH KEY MATNR = WA_MARC-MATNR BINARY SEARCH.
+      IF SY-SUBRC = 0.
+      WA_FINAL-MAKTX = WA_MAKT-MAKTX.
+     ENDIF.
+
+    READ TABLE IT_MBEW INTO WA_MBEW WITH KEY MATNR = WA_MARC-MATNR BINARY SEARCH.
+     IF SY-SUBRC = 0.
+      WA_FINAL-BWKEY = WA_MBEW-BWKEY.
+      WA_FINAL-BWTAR = WA_MBEW-BWTAR.
+      WA_FINAL-BKLAS = WA_MBEW-BKLAS.
+     ENDIF.
+
+    READ TABLE IT_MVKE INTO WA_MVKE WITH KEY MATNR = WA_MARC-MATNR BINARY SEARCH.
+     IF SY-SUBRC = 0.
+         WA_FINAL-VKORG = WA_MVKE-VKORG.
+         WA_FINAL-VTWEG  = WA_MVKE-VTWEG.
+         WA_FINAL-KTGRM = WA_MVKE-KTGRM.
+
+       ENDIF.
+       APPEND WA_FINAL TO IT_FINAL.
+       CLEAR:WA_FINAL,WA_MARA,WA_MARC,WA_MAKT,WA_MBEW,WA_MVKE.
+     ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM BUILD_FIELDCAT .
+*COLUMN POSITION 1: MATNR : MATERIAL NUMBER
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 1. " PCOLUMN POSITION
+  WA_FCAT-FIELDNAME  = 'MATNR'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-KEY = 'X'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-NO_ZERO = 'X'.
+  WA_FCAT-EMPHASIZE = 'C101'.
+  WA_FCAT-FIX_COLUMN = 'X'.
+  WA_FCAT-SELTEXT_M = 'MATERIAL'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 2 : ERSDA: ERSDA
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 2.
+  WA_FCAT-FIELDNAME  = 'ERSDA'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C401'.
+  WA_FCAT-SELTEXT_M = 'Created On'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+
+*COLUMN POSITION 3 : ERNAM : TYPE OF MATERIAL.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 3.
+  WA_FCAT-FIELDNAME  = 'ERNAM'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C401'.
+  WA_FCAT-SELTEXT_M = 'CREATED BY'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+
+*COLUMN POSITION 4: MTART : TYPE OF MATERIAL.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 4.
+  WA_FCAT-FIELDNAME  = 'MTART'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C401'.
+  WA_FCAT-SELTEXT_M = 'MTRL TYPE'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+
+*COLUMN POSITION 5: MBRSH : INDUSTRY SECTOR.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 5.
+  WA_FCAT-FIELDNAME  = 'MBRSH'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C501'.
+  WA_FCAT-SELTEXT_M = 'INDUSTRY SECTOR'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 6: MATKL : MATERIAL GROUP.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 6.
+  WA_FCAT-FIELDNAME  = 'MATKL'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C601'.
+  WA_FCAT-SELTEXT_M = 'MATERIAL GROUP'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 7: MEINS : UNIT OF MEASUREMENT OF MATERIAL.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 7.
+  WA_FCAT-FIELDNAME  = 'MEINS'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'UNIT OF MEASUREMENT'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 8: WERKS : PLANT.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 8.
+  WA_FCAT-FIELDNAME  = 'WERKS'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'PLANT'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 9: EKGRP : Purchasing Group.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 9.
+  WA_FCAT-FIELDNAME  = 'EKGRP'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'PURCHASING GROUP'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 10: STEUC : Control code.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 10.
+  WA_FCAT-FIELDNAME  = 'STEUC'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'CONTROL CODE'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 11: MAKTX: Material Description.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 11.
+  WA_FCAT-FIELDNAME  = 'MAKTX'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'MAT DESC'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 12: BWTAR: Valuation Type.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 12.
+  WA_FCAT-FIELDNAME  = 'BWTAR'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'VALUATIME TYPE'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 13: BKLAS : Valuation Class.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 13.
+  WA_FCAT-FIELDNAME  = 'BKLAS'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'VALUATIME CLASS'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 14: VKORG : Sales Organization.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 14.
+  WA_FCAT-FIELDNAME  = 'VKORG'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'SALES ORGANIZATION '.
+  APPEND WA_FCAT TO IT_FCAT.
+
+*COLUMN POSITION 15: VTWEG : Distribution Channel.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 15.
+  WA_FCAT-FIELDNAME  = 'VTWEG'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_M = 'DISTRIBUTION CHANNEL'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+
+*COLUMN POSITION 16 : KTGRM: Account assignment group for this material.
+  CLEAR WA_FCAT.
+  WA_FCAT-COL_POS     = 16.
+  WA_FCAT-FIELDNAME  = 'KTGRM'.
+  WA_FCAT-TABNAME = 'IT_FINAL'.
+  WA_FCAT-JUST = 'C'.
+  WA_FCAT-EMPHASIZE = 'C701'.
+  WA_FCAT-SELTEXT_L = 'Account assignment group'.
+  APPEND WA_FCAT TO IT_FCAT.
+
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM GET_DISPLAY .
+CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+ EXPORTING
+
+   I_CALLBACK_PROGRAM                = SY-REPID
+   I_GRID_TITLE                      = 'MATERIAL MASTER DATA ON HSN AND SAC CODE'
+   IT_FIELDCAT                       = IT_FCAT
+
+  TABLES
+    T_OUTTAB                          = IT_FINAL
+ EXCEPTIONS
+   PROGRAM_ERROR                     = 1
+   OTHERS                            = 2
+          .
+IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+
+ENDFORM.
